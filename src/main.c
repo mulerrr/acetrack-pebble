@@ -25,6 +25,7 @@ static TextLayer *s_name_p2_layer;
 static TextLayer *s_server_p1_layer;
 static TextLayer *s_server_p2_layer;
 static TextLayer *s_status_layer;
+static TextLayer *s_time_layer;
 
 // Buffers
 static char s_p1_score_buffer[8];
@@ -35,6 +36,22 @@ static char s_p1_sets_buffer[8];
 static char s_p2_sets_buffer[8];
 static char s_p1_name_buffer[20];
 static char s_p2_name_buffer[20];
+static char s_time_buffer[8];
+
+// --- Time Handling ---
+
+static void update_time() {
+  time_t temp = time(NULL);
+  struct tm *tick_time = localtime(&temp);
+
+  strftime(s_time_buffer, sizeof(s_time_buffer),
+           clock_is_24h_style() ? "%H:%M" : "%I:%M", tick_time);
+  text_layer_set_text(s_time_layer, s_time_buffer);
+}
+
+static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+  update_time();
+}
 
 // --- AppMessage Helpers ---
 
@@ -142,13 +159,19 @@ static void main_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
 
-  // Status/Header
-  s_status_layer = text_layer_create(GRect(0, 0, bounds.size.w, 16));
-  text_layer_set_text(s_status_layer, "AceTrack Remote");
-  text_layer_set_text_alignment(s_status_layer, GTextAlignmentCenter);
+  // Status/Header (Title)
+  s_status_layer = text_layer_create(GRect(2, 0, 100, 18));
+  text_layer_set_text(s_status_layer, "AT Remote");
+  text_layer_set_text_alignment(s_status_layer, GTextAlignmentLeft);
   text_layer_set_font(s_status_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_14));
+                      fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD));
   layer_add_child(window_layer, text_layer_get_layer(s_status_layer));
+
+  // Time
+  s_time_layer = text_layer_create(GRect(bounds.size.w - 42, 0, 40, 18));
+  text_layer_set_text_alignment(s_time_layer, GTextAlignmentRight);
+  text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  layer_add_child(window_layer, text_layer_get_layer(s_time_layer));
 
   // --- Player 1 Section ---
   // Name
@@ -156,7 +179,7 @@ static void main_window_load(Window *window) {
   text_layer_set_text(s_name_p1_layer, "Player 1");
   text_layer_set_font(s_name_p1_layer,
                       fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_text_alignment(s_name_p1_layer, GTextAlignmentLeft);
+  text_layer_set_text_alignment(s_name_p1_layer, GTextAlignmentCenter);
   layer_add_child(window_layer, text_layer_get_layer(s_name_p1_layer));
 
   // Server Indicator (P1)
@@ -180,8 +203,9 @@ static void main_window_load(Window *window) {
   text_layer_set_text(s_games_p1_layer, "G:0");
   layer_add_child(window_layer, text_layer_get_layer(s_games_p1_layer));
 
-  s_sets_p1_layer = text_layer_create(GRect(70, 70, 60, 20));
+  s_sets_p1_layer = text_layer_create(GRect(bounds.size.w - 65, 70, 60, 20));
   text_layer_set_text(s_sets_p1_layer, "S:0");
+  text_layer_set_text_alignment(s_sets_p1_layer, GTextAlignmentRight);
   layer_add_child(window_layer, text_layer_get_layer(s_sets_p1_layer));
 
   // Divider
@@ -189,16 +213,34 @@ static void main_window_load(Window *window) {
   layer_add_child(window_layer, divider);
 
   // --- Player 2 Section ---
-  // Name
-  s_name_p2_layer = text_layer_create(GRect(5, 92, bounds.size.w - 10, 20));
+  // Games/Sets (Moved to Top of Section)
+  s_games_p2_layer = text_layer_create(GRect(5, 92, 60, 20));
+  text_layer_set_text(s_games_p2_layer, "G:0");
+  layer_add_child(window_layer, text_layer_get_layer(s_games_p2_layer));
+
+  s_sets_p2_layer = text_layer_create(GRect(bounds.size.w - 65, 92, 60, 20));
+  text_layer_set_text(s_sets_p2_layer, "S:0");
+  text_layer_set_text_alignment(s_sets_p2_layer, GTextAlignmentRight);
+  layer_add_child(window_layer, text_layer_get_layer(s_sets_p2_layer));
+
+  // Score (Moved Down slightly)
+  s_score_p2_layer = text_layer_create(GRect(0, 112, bounds.size.w, 38));
+  text_layer_set_font(s_score_p2_layer,
+                      fonts_get_system_font(FONT_KEY_BITHAM_34_MEDIUM_NUMBERS));
+  text_layer_set_text_alignment(s_score_p2_layer, GTextAlignmentCenter);
+  text_layer_set_text(s_score_p2_layer, "0");
+  layer_add_child(window_layer, text_layer_get_layer(s_score_p2_layer));
+
+  // Name (Moved to Bottom)
+  s_name_p2_layer = text_layer_create(GRect(5, 148, bounds.size.w - 10, 20));
   text_layer_set_text(s_name_p2_layer, "Player 2");
   text_layer_set_font(s_name_p2_layer,
                       fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_text_alignment(s_name_p2_layer, GTextAlignmentLeft);
+  text_layer_set_text_alignment(s_name_p2_layer, GTextAlignmentCenter);
   layer_add_child(window_layer, text_layer_get_layer(s_name_p2_layer));
 
   // Server Indicator (P2)
-  s_server_p2_layer = text_layer_create(GRect(bounds.size.w - 20, 92, 15, 20));
+  s_server_p2_layer = text_layer_create(GRect(bounds.size.w - 20, 148, 15, 20));
   text_layer_set_text(s_server_p2_layer, "*");
   text_layer_set_font(s_server_p2_layer,
                       fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
@@ -206,21 +248,8 @@ static void main_window_load(Window *window) {
                    true); // Default hidden
   layer_add_child(window_layer, text_layer_get_layer(s_server_p2_layer));
 
-  // Score
-  s_score_p2_layer = text_layer_create(GRect(0, 110, bounds.size.w, 38));
-  text_layer_set_font(s_score_p2_layer,
-                      fonts_get_system_font(FONT_KEY_BITHAM_34_MEDIUM_NUMBERS));
-  text_layer_set_text_alignment(s_score_p2_layer, GTextAlignmentCenter);
-  text_layer_set_text(s_score_p2_layer, "0");
-  layer_add_child(window_layer, text_layer_get_layer(s_score_p2_layer));
-
-  s_games_p2_layer = text_layer_create(GRect(5, 145, 60, 20));
-  text_layer_set_text(s_games_p2_layer, "G:0");
-  layer_add_child(window_layer, text_layer_get_layer(s_games_p2_layer));
-
-  s_sets_p2_layer = text_layer_create(GRect(70, 145, 60, 20));
-  text_layer_set_text(s_sets_p2_layer, "S:0");
-  layer_add_child(window_layer, text_layer_get_layer(s_sets_p2_layer));
+  // Initial Time
+  update_time();
 }
 
 static void main_window_unload(Window *window) {
@@ -235,6 +264,7 @@ static void main_window_unload(Window *window) {
   text_layer_destroy(s_server_p1_layer);
   text_layer_destroy(s_server_p2_layer);
   text_layer_destroy(s_status_layer);
+  text_layer_destroy(s_time_layer);
 }
 
 // --- Initialization ---
@@ -251,6 +281,9 @@ static void init() {
   app_message_register_inbox_received(inbox_received_callback);
   app_message_open(app_message_inbox_size_maximum(),
                    app_message_outbox_size_maximum());
+
+  // Register with TickTimerService
+  tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
 }
 
 static void deinit() { window_destroy(s_main_window); }
