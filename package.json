@@ -31,7 +31,26 @@
             "SERVER": 7
         },
         "resources": {
-            "media": []
+            "media": [
+                {
+                    "type": "font",
+                    "name": "FONT_MOTOROLA_48",
+                    "file": "fonts/MotorolaScreentype.ttf",
+                    "characterRegex": "[0-9a-zA-Z]"
+                },
+                {
+                    "type": "font",
+                    "name": "FONT_MOTOROLA_20",
+                    "file": "fonts/MotorolaScreentype.ttf",
+                    "characterRegex": "[0-9GMSTP: a-zA-Z*.]"
+                },
+                {
+                    "type": "font",
+                    "name": "FONT_MOTOROLA_14",
+                    "file": "fonts/MotorolaScreentype.ttf",
+                    "characterRegex": "[0-9: a-zA-Z]"
+                }
+            ]
         }
     }
 }

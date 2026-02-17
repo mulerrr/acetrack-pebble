@@ -16,6 +16,7 @@
 #define KEY_PLAYER2_NAME 9
 
 // UI Elements
+// UI Elements
 static Window *s_main_window;
 static TextLayer *s_score_p1_layer;
 static TextLayer *s_score_p2_layer;
@@ -25,9 +26,16 @@ static TextLayer *s_sets_p1_layer;
 static TextLayer *s_sets_p2_layer;
 static TextLayer *s_name_p1_layer;
 static TextLayer *s_name_p2_layer;
-// Server layers removed, merged into name
 static TextLayer *s_status_layer;
 static TextLayer *s_time_layer;
+static TextLayer *s_serve_icon_p1;
+static TextLayer *s_serve_icon_p2;
+
+// Fonts
+static GFont s_font_motorola_48;
+static GFont s_font_motorola_20;
+static GFont s_font_motorola_14;
+static GFont s_font_motorola_14;
 
 // Buffers
 static char s_p1_score_buffer[8];
@@ -118,6 +126,11 @@ static void update_ui_from_state() {
 
   // Names & Server
   update_name_text();
+
+  // Update Serve Icons (*)
+  int server = s_is_standalone ? state->server : s_remote_server;
+  layer_set_hidden(text_layer_get_layer(s_serve_icon_p1), server != 0);
+  layer_set_hidden(text_layer_get_layer(s_serve_icon_p2), server != 1);
 }
 
 void main_window_update_ui() { update_ui_from_state(); }
@@ -248,97 +261,140 @@ static void main_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
 
-  // Status/Header (Title)
-  s_status_layer =
-      text_layer_create(GRect(2, -2, 100, 18)); // Moved up slightly
+  // Set Background Color
+  window_set_background_color(window, GColorDarkGreen);
+
+  // Load Fonts
+  s_font_motorola_48 =
+      fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_MOTOROLA_48));
+  s_font_motorola_20 =
+      fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_MOTOROLA_20));
+  s_font_motorola_14 =
+      fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_MOTOROLA_14));
+
+  // --- Header ---
+
+  // Status (Title)
+  s_status_layer = text_layer_create(GRect(6, 5, 100, 20)); // X=6, Y=5
   if (s_is_standalone) {
     text_layer_set_text(s_status_layer, "Standalone");
   } else {
     text_layer_set_text(s_status_layer, "AT Remote");
   }
   text_layer_set_text_alignment(s_status_layer, GTextAlignmentLeft);
-  text_layer_set_font(s_status_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD));
+  text_layer_set_font(s_status_layer, s_font_motorola_14);
+  text_layer_set_background_color(s_status_layer, GColorClear);
+  text_layer_set_text_color(s_status_layer, GColorWhite);
   layer_add_child(window_layer, text_layer_get_layer(s_status_layer));
 
   // Time
-  s_time_layer = text_layer_create(GRect(bounds.size.w - 42, -2, 40, 18));
+  s_time_layer = text_layer_create(
+      GRect(bounds.size.w - 46, 5, 40, 20)); // X moved left, Y=5
   text_layer_set_text_alignment(s_time_layer, GTextAlignmentRight);
-  text_layer_set_font(s_time_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  text_layer_set_font(s_time_layer, s_font_motorola_14);
+  text_layer_set_background_color(s_time_layer, GColorClear);
+  text_layer_set_text_color(s_time_layer, GColorWhite);
   layer_add_child(window_layer, text_layer_get_layer(s_time_layer));
 
-  // --- Player 1 Section ---
-  // Row 1: Games | Name | Sets (Y = 16)
+  // --- Scores (Side by Side) ---
 
-  // Games P1 (Left)
-  s_games_p1_layer = text_layer_create(GRect(2, 16, 30, 20));
-  text_layer_set_text(s_games_p1_layer, "G:0");
-  text_layer_set_font(s_games_p1_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_text_alignment(s_games_p1_layer, GTextAlignmentLeft);
-  layer_add_child(window_layer, text_layer_get_layer(s_games_p1_layer));
+  // Vertical Separator (using TextLayer as line) - Thicker (4px)
+  TextLayer *v_div = text_layer_create(GRect(70, 0, 4, 100));
+  text_layer_set_background_color(v_div, GColorWhite);
+  layer_add_child(window_layer, text_layer_get_layer(v_div));
 
-  // Sets P1 (Right)
-  s_sets_p1_layer = text_layer_create(GRect(112, 16, 30, 20));
-  text_layer_set_text(s_sets_p1_layer, "S:0");
-  text_layer_set_font(s_sets_p1_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_text_alignment(s_sets_p1_layer, GTextAlignmentRight);
-  layer_add_child(window_layer, text_layer_get_layer(s_sets_p1_layer));
-
-  // Name P1 (Center)
-  s_name_p1_layer = text_layer_create(GRect(32, 16, 80, 20));
-  text_layer_set_font(s_name_p1_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_text_alignment(s_name_p1_layer, GTextAlignmentCenter);
-  layer_add_child(window_layer, text_layer_get_layer(s_name_p1_layer));
-
-  // Score P1 (Y = 36)
-  s_score_p1_layer = text_layer_create(GRect(0, 36, bounds.size.w, 50));
-  text_layer_set_font(s_score_p1_layer,
-                      fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD));
+  // Score P1 (Left)
+  s_score_p1_layer = text_layer_create(GRect(0, 35, 70, 50)); // Lowered Y
+  text_layer_set_font(s_score_p1_layer, s_font_motorola_48);
   text_layer_set_text_alignment(s_score_p1_layer, GTextAlignmentCenter);
+  text_layer_set_background_color(s_score_p1_layer, GColorClear);
+  text_layer_set_text_color(s_score_p1_layer, GColorWhite);
   text_layer_set_text(s_score_p1_layer, "0");
   layer_add_child(window_layer, text_layer_get_layer(s_score_p1_layer));
 
-  // Divider
-  Layer *divider = layer_create(GRect(10, 85, bounds.size.w - 20, 2));
-  layer_add_child(window_layer, divider);
-
-  // --- Player 2 Section ---
-
-  // Score P2 (Y = 88)
-  s_score_p2_layer = text_layer_create(GRect(0, 88, bounds.size.w, 50));
-  text_layer_set_font(s_score_p2_layer,
-                      fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD));
+  // Score P2 (Right)
+  s_score_p2_layer = text_layer_create(GRect(74, 35, 70, 50)); // Lowered Y
+  text_layer_set_font(s_score_p2_layer, s_font_motorola_48);
   text_layer_set_text_alignment(s_score_p2_layer, GTextAlignmentCenter);
+  text_layer_set_background_color(s_score_p2_layer, GColorClear);
+  text_layer_set_text_color(s_score_p2_layer, GColorWhite);
   text_layer_set_text(s_score_p2_layer, "0");
   layer_add_child(window_layer, text_layer_get_layer(s_score_p2_layer));
 
-  // Row 2: Games | Name | Sets (Y = 138)
+  // Serve Icons "." (Top Right of each score box)
+  // Using 48px font for BIG dot. Adjusted Y to align.
+  s_serve_icon_p1 = text_layer_create(GRect(45, 20, 30, 50));
+  text_layer_set_text(s_serve_icon_p1, ".");
+  text_layer_set_font(s_serve_icon_p1, s_font_motorola_48);
+  text_layer_set_text_alignment(s_serve_icon_p1, GTextAlignmentCenter);
+  text_layer_set_background_color(s_serve_icon_p1, GColorClear);
+  text_layer_set_text_color(s_serve_icon_p1, GColorWhite);
+  layer_add_child(window_layer, text_layer_get_layer(s_serve_icon_p1));
+  layer_set_hidden(text_layer_get_layer(s_serve_icon_p1), true);
 
-  // Games P2 (Left)
-  s_games_p2_layer = text_layer_create(GRect(2, 138, 30, 20));
+  s_serve_icon_p2 = text_layer_create(GRect(114, 20, 30, 50));
+  text_layer_set_text(s_serve_icon_p2, ".");
+  text_layer_set_font(s_serve_icon_p2, s_font_motorola_48);
+  text_layer_set_text_alignment(s_serve_icon_p2, GTextAlignmentCenter);
+  text_layer_set_background_color(s_serve_icon_p2, GColorClear);
+  text_layer_set_text_color(s_serve_icon_p2, GColorWhite);
+  layer_add_child(window_layer, text_layer_get_layer(s_serve_icon_p2));
+  layer_set_hidden(text_layer_get_layer(s_serve_icon_p2), true);
+
+  // --- Stats Area (Bottom) ---
+
+  // Horizontal Separator (Thicker 4px, moved down)
+  TextLayer *h_div = text_layer_create(GRect(0, 100, 144, 4));
+  text_layer_set_background_color(h_div, GColorWhite);
+  layer_add_child(window_layer, text_layer_get_layer(h_div));
+
+  // P1 Row (Y = 108)
+  s_name_p1_layer = text_layer_create(GRect(6, 108, 80, 24)); // X=6
+  text_layer_set_font(s_name_p1_layer, s_font_motorola_20);
+  text_layer_set_text_alignment(s_name_p1_layer, GTextAlignmentLeft);
+  text_layer_set_background_color(s_name_p1_layer, GColorClear);
+  text_layer_set_text_color(s_name_p1_layer, GColorWhite);
+  layer_add_child(window_layer, text_layer_get_layer(s_name_p1_layer));
+
+  s_games_p1_layer = text_layer_create(GRect(85, 108, 30, 24));
+  text_layer_set_text(s_games_p1_layer, "G:0");
+  text_layer_set_font(s_games_p1_layer, s_font_motorola_20);
+  text_layer_set_text_alignment(s_games_p1_layer, GTextAlignmentRight);
+  text_layer_set_background_color(s_games_p1_layer, GColorClear);
+  text_layer_set_text_color(s_games_p1_layer, GColorWhite);
+  layer_add_child(window_layer, text_layer_get_layer(s_games_p1_layer));
+
+  s_sets_p1_layer = text_layer_create(GRect(115, 108, 25, 24));
+  text_layer_set_text(s_sets_p1_layer, "S:0");
+  text_layer_set_font(s_sets_p1_layer, s_font_motorola_20);
+  text_layer_set_text_alignment(s_sets_p1_layer, GTextAlignmentRight);
+  text_layer_set_background_color(s_sets_p1_layer, GColorClear);
+  text_layer_set_text_color(s_sets_p1_layer, GColorWhite);
+  layer_add_child(window_layer, text_layer_get_layer(s_sets_p1_layer));
+
+  // P2 Row (Y = 136)
+  s_name_p2_layer = text_layer_create(GRect(6, 136, 80, 24)); // X=6
+  text_layer_set_font(s_name_p2_layer, s_font_motorola_20);
+  text_layer_set_text_alignment(s_name_p2_layer, GTextAlignmentLeft);
+  text_layer_set_background_color(s_name_p2_layer, GColorClear);
+  text_layer_set_text_color(s_name_p2_layer, GColorWhite);
+  layer_add_child(window_layer, text_layer_get_layer(s_name_p2_layer));
+
+  s_games_p2_layer = text_layer_create(GRect(85, 136, 30, 24));
   text_layer_set_text(s_games_p2_layer, "G:0");
-  text_layer_set_font(s_games_p2_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_text_alignment(s_games_p2_layer, GTextAlignmentLeft);
+  text_layer_set_font(s_games_p2_layer, s_font_motorola_20);
+  text_layer_set_text_alignment(s_games_p2_layer, GTextAlignmentRight);
+  text_layer_set_background_color(s_games_p2_layer, GColorClear);
+  text_layer_set_text_color(s_games_p2_layer, GColorWhite);
   layer_add_child(window_layer, text_layer_get_layer(s_games_p2_layer));
 
-  // Sets P2 (Right)
-  s_sets_p2_layer = text_layer_create(GRect(112, 138, 30, 20));
+  s_sets_p2_layer = text_layer_create(GRect(115, 136, 25, 24));
   text_layer_set_text(s_sets_p2_layer, "S:0");
-  text_layer_set_font(s_sets_p2_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  text_layer_set_font(s_sets_p2_layer, s_font_motorola_20);
   text_layer_set_text_alignment(s_sets_p2_layer, GTextAlignmentRight);
+  text_layer_set_background_color(s_sets_p2_layer, GColorClear);
+  text_layer_set_text_color(s_sets_p2_layer, GColorWhite);
   layer_add_child(window_layer, text_layer_get_layer(s_sets_p2_layer));
-
-  // Name P2 (Center)
-  s_name_p2_layer = text_layer_create(GRect(32, 138, 80, 20));
-  text_layer_set_font(s_name_p2_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_text_alignment(s_name_p2_layer, GTextAlignmentCenter);
-  layer_add_child(window_layer, text_layer_get_layer(s_name_p2_layer));
 
   // Initial Time
   update_time();
@@ -368,6 +424,12 @@ static void main_window_unload(Window *window) {
   text_layer_destroy(s_name_p2_layer);
   text_layer_destroy(s_status_layer);
   text_layer_destroy(s_time_layer);
+  text_layer_destroy(s_serve_icon_p1);
+  text_layer_destroy(s_serve_icon_p2);
+
+  fonts_unload_custom_font(s_font_motorola_48);
+  fonts_unload_custom_font(s_font_motorola_20);
+  fonts_unload_custom_font(s_font_motorola_14);
 }
 
 // --- Initialization ---
